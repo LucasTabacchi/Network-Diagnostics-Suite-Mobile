@@ -1,0 +1,14 @@
+{
+  "name": "netdiag-backend-stub",
+  "version": "1.0.0",
+  "description": "Minimal sync stub backend for TP6 Network Diagnostics Suite",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "ssh2": "^1.17.0"
+  }
+}

@@ -1,0 +1,8 @@
+node_modules/
+*.log
+.gradle/
+build/
+.cxx/
+*.apk
+odd/
+stitch_network_diagnostics_suite_mobile_app*/
