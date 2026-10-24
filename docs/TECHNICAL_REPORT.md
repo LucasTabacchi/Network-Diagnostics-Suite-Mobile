@@ -10,7 +10,7 @@
 
 ## 1. Resumen Ejecutivo y Visión General de la Arquitectura
 
-La **Network Diagnostics Suite** es un conjunto de herramientas móviles diseñado para técnicos e ingenieros de telecomunicaciones encargados de la instalación y el mantenimiento de infraestructura de red (ONTs de fibra óptica, enlaces inalámbricos punto a punto, switches gestionables y routers de borde). Dado que los escenarios operativos de campo (torres de comunicaciones, azoteas, armarios en vía pública y salas de servidores) presentan conectividad móvil nula o intermitente, el sistema implementa una arquitectura rigurosamente **offline-first, de confianza cero y cómputo local**.
+La **Network Diagnostics Suite** es un conjunto de herramientas móviles diseñado para técnicos e ingenieros de telecomunicaciones encargados de la instalación y el mantenimiento de infraestructura[...]
 
 ### 1.1 Arquitectura en Capas y Hexagonal
 
@@ -56,7 +56,7 @@ graph TD
 
 ## 2. Capa de Protocolos de Red de Bajo Nivel: Cliente SNMP Propio
 
-Las abstracciones habituales de red en aplicaciones móviles se circunscriben al protocolo HTTP/REST, careciendo de soporte directo para protocolos binarios de bajo nivel. Para comunicarse con equipamiento de red sobre el puerto UDP 161 sin depender de librerías nativas externas en C++ o Java, se diseñó e implementó un **códec ASN.1 / BER (Basic Encoding Rules) y un analizador sintáctico de PDUs SNMP v1/v2c en TypeScript puro**.
+Las abstracciones habituales de red en aplicaciones móviles se circunscriben al protocolo HTTP/REST, careciendo de soporte directo para protocolos binarios de bajo nivel. Para comunicarse con equipam[...]
 
 ### 2.1 Códec ASN.1 BER (`src/network/snmp/BerCodec.ts`)
 
@@ -83,9 +83,9 @@ Tipos ASN.1 / SNMP soportados e implementados:
 | `0xA2` | `GetResponse-PDU` | Contexto/Construido | PDU de respuesta del dispositivo con variables resueltas |
 
 #### Codificación Base-128 de Identificadores de Objetos (OID)
-Los primeros dos subidentificadores $X$ e $Y$ del OID (por ejemplo, `1.3` para `iso.org`) se compactan en el primer byte según la fórmula $(X \times 40) + Y = 43$ (`0x2B`). Los subidentificadores posteriores con valores $\ge 128$ se dividen en fragmentos de 7 bits con el bit más significativo encendido ($0x80$) en todos los bytes excepto en el byte de terminación:
+Los primeros dos subidentificadores $X$ e $Y$ del OID (por ejemplo, `1.3` para `iso.org`) se compactan en el primer byte según la fórmula $(X \times 40) + Y = 43$ (`0x2B`). Los subidentificadores po[...]
 
-$$\text{Valor} = \sum_{i=0}^{k-1} (B_i \ \& \ 0x7F) \cdot 128^{(k-1-i)}$$
+$$Valor = \sum_{i=0}^{k-1}(B_i \& 0x7F)\cdot128^{(k-1-i)}$$
 
 ### 2.2 Estructura del Mensaje SNMP y Construcción de PDUs (`src/network/snmp/SnmpClient.ts`)
 
@@ -125,19 +125,19 @@ SEQUENCE (Mensaje) {
 
 ### 2.4 Análisis de Seguridad y Alcance del Protocolo
 
-- **Comunidades en Texto Claro:** SNMP v1 y v2c transmiten la cadena de comunidad en texto plano sin cifrado. En entornos de campo, se recomienda realizar las consultas a través de VLANs de administración aisladas o puertos de servicio directos.
-- **Suplantación y Replay UDP:** El protocolo UDP no posee un canal con estado. El cliente genera valores de `request-id` pseudoaleatorios criptográficos de 32 bits y valida que el paquete `GetResponse` coincida de manera estricta con la solicitud enviada.
-- **Alcance frente a SNMPv3:** SNMPv3 introduce autenticación USM y cifrado CBC-DES/AES. Dado el alcance de este trabajo práctico y los requisitos de conectividad de routers de acceso en campo, se priorizó la estabilidad, robustez y optimización de un cliente SNMP v1/v2c liviano en TypeScript.
+- **Comunidades en Texto Claro:** SNMP v1 y v2c transmiten la cadena de comunidad en texto plano sin cifrado. En entornos de campo, se recomienda realizar las consultas a través de VLANs de administr[...]
+- **Suplantación y Replay UDP:** El protocolo UDP no posee un canal con estado. El cliente genera valores de `request-id` pseudoaleatorios criptográficos de 32 bits y valida que el paquete `GetRespo[...]
+- **Alcance frente a SNMPv3:** SNMPv3 introduce autenticación USM y cifrado CBC-DES/AES. Dado el alcance de este trabajo práctico y los requisitos de conectividad de routers de acceso en campo, se p[...]
 
 ---
 
 ## 3. Arquitectura de Seguridad y Gestión de Credenciales
 
-Los técnicos de campo manejan accesos privilegiados a equipamiento heterogéneo (MikroTik RouterOS, Cisco IOS, Huawei VRP, Ubiquiti EdgeOS). La persistencia de contraseñas o claves privadas en archivos de base de datos o volcados de memoria representaría un riesgo crítico de seguridad.
+Los técnicos de campo manejan accesos privilegiados a equipamiento heterogéneo (MikroTik RouterOS, Cisco IOS, Huawei VRP, Ubiquiti EdgeOS). La persistencia de contraseñas o claves privadas en archi[...]
 
 ### 3.1 Integración con Hardware Keystore (`src/security/CredentialManager.ts`)
 
-- **Aislamiento Criptográfico:** Las contraseñas y claves privadas **nunca se guardan en SQLite ni en texto plano**. Se resguardan exclusivamente en el **Android Keystore System** a través de `react-native-keychain`, utilizando cifrado AES-256-GCM respaldado por hardware del dispositivo.
+- **Aislamiento Criptográfico:** Las contraseñas y claves privadas **nunca se guardan en SQLite ni en texto plano**. Se resguardan exclusivamente en el **Android Keystore System** a través de `reac[...]
 - **Patrón de Referencia Opaca en SQLite:** La tabla `credentials` de la base de datos local almacena únicamente metadatos descriptivos:
   - `id`: Identificador UUIDv4 único.
   - `name`: Nombre descriptivo (ej: "Nodo Centro - Admin").
@@ -145,7 +145,7 @@ Los técnicos de campo manejan accesos privilegiados a equipamiento heterogéneo
   - `username`: Nombre de usuario SSH.
   - `keychain_ref`: Puntero de referencia al Keystore (`netdiag_cred_<id>`).
   - `port`: Puerto SSH configurado (22, 2222, etc.).
-- **Desreferenciación Efímera en Memoria:** El secreto en texto claro solo se extrae del enclave seguro en el instante exacto de abrir la sesión SSH y se libera de memoria una vez autenticada la conexión.
+- **Desreferenciación Efímera en Memoria:** El secreto en texto claro solo se extrae del enclave seguro en el instante exacto de abrir la sesión SSH y se libera de memoria una vez autenticada la co[...]
 - **Saneamiento de la Cola Outbox:** Los paquetes de datos preparados para sincronización hacia el backend no incluyen credenciales ni material criptográfico sensible.
 
 ### 3.2 Servicio de Comandos SSH (`src/network/ssh/SshService.ts`)
@@ -221,7 +221,7 @@ Valores de configuración:
 
 ### 4.3 Disparo Automático por Conectividad (NetInfo Listener)
 
-`SyncWorker` se suscribe a los eventos de `@react-native-community/netinfo`. Al pasar de un estado sin red a `isConnected: true` (o `isInternetReachable: true`), el trabajador despierta automáticamente, selecciona los elementos con `status IN ('pending', 'failed')` cuya marca `next_retry_at <= now()`, y efectúa la sincronización por lotes contra el endpoint `POST /sync/push`.
+`SyncWorker` se suscribe a los eventos de `@react-native-community/netinfo`. Al pasar de un estado sin red a `isConnected: true` (o `isInternetReachable: true`), el trabajador despierta automáticamen[...]
 
 ### 4.4 Protocolo de Resolución de Conflictos (HTTP 409)
 
@@ -266,16 +266,16 @@ sequenceDiagram
 
 ### 4.5 Justificación Tecnológica: Selección de `@op-engineering/op-sqlite` frente a `WatermelonDB`
 
-El enunciado del proyecto requería la implementación de persistencia local offline-first robusta, permitiendo optar entre **SQLite nativo** o **WatermelonDB**. La decisión de ingeniería de seleccionar `@op-engineering/op-sqlite` responde a los siguientes factores arquitectónicos críticos:
+El enunciado del proyecto requería la implementación de persistencia local offline-first robusta, permitiendo optar entre **SQLite nativo** o **WatermelonDB**. La decisión de ingeniería de se[...]
 
 1. **Rendimiento C++ JSI Directo sin Serialización Bridge:**  
-   `op-sqlite` utiliza enlaces directos a nivel C++ mediante JavaScript Interface (JSI). Las operaciones de lectura/escritura en la base de datos se ejecutan en memoria compartida sin serializar ni deserializar cadenas JSON a través del bridge asincrónico tradicional de React Native, alcanzando velocidades hasta 10 veces superiores en inserciones masivas de telemetría.
+   `op-sqlite` utiliza enlaces directos a nivel C++ mediante JavaScript Interface (JSI). Las operaciones de lectura/escritura en la base de datos se ejecutan en memoria compartida sin serializar [...]
 2. **Compatibilidad Plena con React Native 0.87 (New Architecture - Fabric & TurboModules):**  
-   React Native 0.87 opera con la Nueva Arquitectura habilitada por defecto. `op-sqlite` posee soporte nativo para TurboModules y C++ JSI de primera clase, mientras que WatermelonDB históricamente arrastra dependencias del bridge legado y requiere adaptadores complejos de threading para no bloquear la interfaz en Fabric.
+   React Native 0.87 opera con la Nueva Arquitectura habilitada por defecto. `op-sqlite` posee soporte nativo para TurboModules y C++ JSI de primera clase, mientras que WatermelonDB históricamen[...]
 3. **Control Transaccional ACID y SQL Estándar:**  
-   La gestión de colas Outbox y diagnósticos exige garantías transaccionales ACID estrictas (`BEGIN TRANSACTION`, `COMMIT`, `ROLLBACK`). `op-sqlite` ofrece SQL relacional ANSI puro y transacciones atómicas síncronas/asíncronas, permitiendo modelar máquinas de estados exactas sin verse restringido por los esquemas de observables reactivos de WatermelonDB.
+   La gestión de colas Outbox y diagnósticos exige garantías transaccionales ACID estrictas (`BEGIN TRANSACTION`, `COMMIT`, `ROLLBACK`). `op-sqlite` ofrece SQL relacional ANSI puro y transacci[...]
 4. **Baja Huella de Memoria en Dispositivos de Campo:**  
-   Los dispositivos móviles utilizados por cuadrillas técnicas en campo suelen ser terminales Android de gama media o de uso rudo con memoria RAM acotada. Prescindir de la sobrecarga de un motor de observables en memoria (como el adapter RxJS/LokiJS de WatermelonDB) garantiza estabilidad operativa y previene fallos por falta de memoria (Out-of-Memory).
+   Los dispositivos móviles utilizados por cuadrillas técnicas en campo suelen ser terminales Android de gama media o de uso rudo con memoria RAM acotada. Prescindir de la sobrecarga de un moto[...]
 
 ---
 
@@ -290,12 +290,12 @@ Los equipos de telecomunicaciones presentan etiquetas con números de serie, dir
   - URLs de inventario: `https://telecom.net/dev?id=HUAW123456&model=HG8245H`
   - Direcciones MAC directas: `E0:69:95:A1:B2:C3` o `E06995A1B2C3`
   - Números de serie estándar: `SN-1234567890`
-- **Catálogo Técnico Fuera de Línea:** Sin conexión a internet, los modelos reconocidos se vinculan de inmediato a una base local con especificaciones de puertos, frecuencias y umbrales ópticos.
+- **Catálogo Técnico Fuera de Línea:** Sin conexión a internet, los modelos reconocidos se vinculan de inmediato a una base local con especificaciones de puertos, frecuencias y umbrales ópti[...]
 
 ### 5.2 Geolocalización y Validación de Precisión (`src/evidence/LocationService.ts`)
 
 - **GPS de Alta Precisión:** Coordenadas obtenidas mediante `@react-native-community/geolocation` con `enableHighAccuracy: true` y límite de tiempo de 10 segundos.
-- **Transparencia en Fix Satelital:** Cuando la señal de satélite no penetra (armarios metálicos o subterráneos), el servicio provee coordenadas de referencia del campus FCyT Concepción del Uruguay (`-32.4825, -58.2321`) con la bandera explícita `isEstimated: true` y precisión no falsificada, garantizando veracidad forense en el reporte técnico.
+- **Transparencia en Fix Satelital:** Cuando la señal de satélite no penetra (armarios metálicos o subterráneos), el servicio provee coordenadas de referencia del campus FCyT Concepción del Urugu[...]
 
 ### 5.3 Asistente de Instalación y Generador de Reportes PDF (`src/evidence/PdfReportService.ts`)
 
@@ -326,14 +326,14 @@ $$\text{Entero de Red} = \text{Entero IP} \ \& \ \text{Entero Máscara}$$
 
 $$\text{Entero Broadcast} = \text{Entero Red} \ | \ (\sim\text{Entero Máscara} \ \& \ \text{0xFFFFFFFF})$$
 
-Las direcciones de host utilizables se generan en el intervalo $[\text{Red} + 1, \ \text{Broadcast} - 1]$, acotando la búsqueda a un máximo de 254 hosts (prefijo `/24`) para evitar saturación de sockets y consumo excesivo de batería en el dispositivo móvil.
+Las direcciones de host utilizables se generan en el intervalo $[\text{Red} + 1, \ \text{Broadcast} - 1]$, acotando la búsqueda a un máximo de 254 hosts (prefijo `/24`) para evitar saturación de so[...]
 
 ### 6.2 Sondeo Concurrente de Puertos y Servicios
 
 El motor articula varias técnicas de descubrimiento en paralelo:
-- **Barrido Concurrente de Puertos TCP:** Conexión hacia puertos estándar de gestión de telecomunicaciones (`22` SSH, `23` Telnet, `80` HTTP, `443` HTTPS, `8291` MikroTik Winbox, `8080` Web alternativo) utilizando una ventana deslizante de 10 sockets simultáneos y un tiempo de espera de 600 ms.
-- **Sondeo SNMP Ping:** Envío de solicitudes `GetRequest` para `sysDescr.0` (`1.3.6.1.2.1.1.1.0`) sobre UDP 161. Los equipos que responden son clasificados de inmediato con su fabricante y nombre de sistema.
-- **Descubrimiento Zero-Configuration (mDNS):** Escucha de anuncios Bonjour / Avahi (`_http._tcp.`, `_ssh._tcp.`, `_snmp._udp.`) mediante `react-native-zeroconf` con limpieza rigurosa de escuchadores para prevenir fugas de memoria (`removeAllListeners()`).
+- **Barrido Concurrente de Puertos TCP:** Conexión hacia puertos estándar de gestión de telecomunicaciones (`22` SSH, `23` Telnet, `80` HTTP, `443` HTTPS, `8291` MikroTik Winbox, `8080` Web alterna[...]
+- **Sondeo SNMP Ping:** Envío de solicitudes `GetRequest` para `sysDescr.0` (`1.3.6.1.2.1.1.1.0`) sobre UDP 161. Los equipos que responden son clasificados de inmediato con su fabricante y nombre de [...]
+- **Descubrimiento Zero-Configuration (mDNS):** Escucha de anuncios Bonjour / Avahi (`_http._tcp.`, `_ssh._tcp.`, `_snmp._udp.`) mediante `react-native-zeroconf` con limpieza rigurosa de escuchadores [...]
 
 ---
 
@@ -341,8 +341,8 @@ El motor articula varias técnicas de descubrimiento en paralelo:
 
 ### 7.1 Mitigación de Restricciones de Lectura ARP en Android 10+
 
-A partir de Android 10 (Nivel de API 29), el sistema operativo bloquea la lectura del archivo del kernel `/proc/net/arp` y neutraliza las consultas de direcciones MAC vía `getifaddrs()`, devolviendo valores fijos `02:00:00:00:00:00` por políticas de privacidad.
-- **Solución Arquitectónica:** En lugar de intentar leer tablas ARP protegidas por el sistema operativo, la suite consulta la tabla MIB-II **`ifPhysAddress.1` (`1.3.6.1.2.1.2.2.1.6.1`)** mediante SNMP. Los routers, switches y ONTs gestionados entregan directamente su dirección MAC real de fábrica en la respuesta de telemetría.
+A partir de Android 10 (Nivel de API 29), el sistema operativo bloquea la lectura del archivo del kernel `/proc/net/arp` y neutraliza las consultas de direcciones MAC vía `getifaddrs()`, devolviendo [...]
+- **Solución Arquitectónica:** En lugar de intentar leer tablas ARP protegidas por el sistema operativo, la suite consulta la tabla MIB-II **`ifPhysAddress.1` (`1.3.6.1.2.1.2.2.1.6.1`)** mediante SN[...]
 
 ### 7.2 Permisos de Manifiesto y Configuración Multicast
 
