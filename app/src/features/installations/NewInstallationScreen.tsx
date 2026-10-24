@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,6 +21,7 @@ import { LocationService, GpsCoordinates } from '../../evidence/LocationService'
 import { PdfReportService } from '../../evidence/PdfReportService';
 import { getRepositories } from '../../store';
 import { Installation } from '../../store/models';
+import { PhotoCaptureModal } from './PhotoCaptureModal';
 
 interface DetectedDevice {
   id: string;
@@ -65,14 +67,9 @@ export const NewInstallationScreen: React.FC = () => {
       timestamp?: string;
     }>
   >([]);
-  const [gpsCoords, setGpsCoords] = useState<GpsCoordinates>({
-    latitude: -32.4825,
-    longitude: -58.2372,
-    accuracy: 5.0,
-    timestamp: Date.now(),
-    isEstimated: false,
-  });
+  const [gpsCoords, setGpsCoords] = useState<GpsCoordinates | null>(null);
   const [gpsLoading, setGpsLoading] = useState<boolean>(false);
+  const [cameraVisible, setCameraVisible] = useState(false);
 
   // Step 3: Technical Notes
   const [notes, setNotes] = useState<string>('');
@@ -112,7 +109,7 @@ export const NewInstallationScreen: React.FC = () => {
         } else {
           setDetectedDevices([]);
         }
-      } catch (_) {
+      } catch {
         setDetectedDevices([]);
       }
     })();
@@ -131,7 +128,7 @@ export const NewInstallationScreen: React.FC = () => {
       const pos = await LocationService.getCurrentLocation();
       setGpsCoords(pos);
     } catch {
-      // Fallback already provided by LocationService
+      setGpsCoords(null);
     } finally {
       setGpsLoading(false);
     }
@@ -145,7 +142,7 @@ export const NewInstallationScreen: React.FC = () => {
     setDeviceSerial(dev.serial);
   };
 
-  const handleAddPhoto = async () => {
+  const handlePhotoCaptured = (uri: string) => {
     const photoNumber = photos.length + 1;
     const labels = [
       'Frente rack',
@@ -156,19 +153,22 @@ export const NewInstallationScreen: React.FC = () => {
     ];
     const defaultLabel = labels[(photoNumber - 1) % labels.length];
     const photoId = `photo_${Date.now()}`;
-    const localUri = `file:///data/user/0/com.fcyt.netdiag/files/${photoId}.jpg`;
-
-    // Associate current truthful GPS coordinates
-    const loc = await LocationService.getCurrentLocation();
     const newPhoto = {
       id: photoId,
       label: `${defaultLabel} (#${photoNumber})`,
-      uri: localUri,
-      latitude: loc.latitude,
-      longitude: loc.longitude,
+      uri,
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
       timestamp: new Date().toISOString(),
     };
     setPhotos((prev) => [...prev, newPhoto]);
+  // A wizard location may be stale by the time the camera captures a photo.
+  LocationService.getCurrentLocation(5000, 0).then((location) => {
+    if (!location) return;
+    setPhotos((prev) => prev.map((photo) => photo.id === photoId
+      ? { ...photo, latitude: location.latitude, longitude: location.longitude }
+      : photo));
+  });
   };
 
   const handleStep1Next = () => {
@@ -211,7 +211,7 @@ export const NewInstallationScreen: React.FC = () => {
       const pdfPath = await PdfReportService.generateReport({
         reportId: `INST-${Date.now().toString().slice(-4)}`,
         siteName: siteName.trim() || 'Sitio sin especificar',
-        technicianName: technicianName.trim() || 'Técnico de Campo',
+        technicianName: technicianName.trim() || 'No especificado',
         date: dateFormatted,
         equipment: {
           name: deviceName,
@@ -220,16 +220,16 @@ export const NewInstallationScreen: React.FC = () => {
           serialNumber: deviceSerial,
           opticalPower: selectedDevice?.opticalPower,
         },
-        gps: {
+        gps: gpsCoords ? {
           latitude: gpsCoords.latitude,
           longitude: gpsCoords.longitude,
           accuracy: gpsCoords.accuracy,
-        },
+        } : undefined,
         photos: photos.map((p) => ({
           uri: p.uri,
           label: p.label,
-          latitude: p.latitude ?? gpsCoords.latitude,
-          longitude: p.longitude ?? gpsCoords.longitude,
+          latitude: p.latitude,
+          longitude: p.longitude,
         })),
         notes,
       });
@@ -241,9 +241,9 @@ export const NewInstallationScreen: React.FC = () => {
         deviceIp,
         deviceMac,
         siteName: siteName.trim() || 'Sitio sin especificar',
-        gpsLat: gpsCoords.latitude,
-        gpsLng: gpsCoords.longitude,
-        gpsAccuracy: gpsCoords.accuracy,
+        gpsLat: gpsCoords?.latitude,
+        gpsLng: gpsCoords?.longitude,
+        gpsAccuracy: gpsCoords?.accuracy,
         notes,
         pdfPath,
         status: 'pending',
@@ -255,7 +255,7 @@ export const NewInstallationScreen: React.FC = () => {
           installationId: instId,
           filePath: p.uri,
           label: p.label,
-          capturedAt: Date.now(),
+          capturedAt: p.timestamp ? Date.parse(p.timestamp) : Date.now(),
         })),
       };
 
@@ -285,6 +285,11 @@ export const NewInstallationScreen: React.FC = () => {
 
   return (
     <View style={styles.screen}>
+      <PhotoCaptureModal
+        visible={cameraVisible}
+        onClose={() => setCameraVisible(false)}
+        onCaptured={handlePhotoCaptured}
+      />
       <StatusHeader
         title="Nueva instalación"
         showBack
@@ -543,30 +548,33 @@ export const NewInstallationScreen: React.FC = () => {
                   >
                     <Icon name="delete" size={14} color={colors.critical} />
                   </TouchableOpacity>
-                  <View style={styles.photoPlaceholder}>
-                    <Icon name="photo_camera" size={24} color={colors.primary} />
-                    <Text style={styles.photoThumbLabel}>{item.label}</Text>
-                  </View>
+                  <Image source={{ uri: item.uri }} style={styles.photoImage} resizeMode="cover" />
                   <View style={styles.photoBadge}>
                     <Icon name="place" size={10} color={colors.primary} />
                     <Text style={styles.photoBadgeText}>
-                      {(item.latitude ?? gpsCoords.latitude).toFixed(4)}, {(item.longitude ?? gpsCoords.longitude).toFixed(4)}
+                      {item.latitude != null && item.longitude != null
+                        ? `${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`
+                        : 'GPS no disponible'}
                     </Text>
                   </View>
                 </View>
               ))}
 
               {/* Add Photo Button */}
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.addPhotoCard}
-                onPress={handleAddPhoto}
-              >
-                <View style={styles.addPhotoIconCircle}>
-                  <Icon name="add_a_photo" size={22} color={colors.primary} />
-                </View>
-                <Text style={styles.addPhotoText}>Agregar foto</Text>
-              </TouchableOpacity>
+              <View style={styles.addPhotoTile}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={styles.addPhotoCard}
+                  onPress={() => setCameraVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Agregar foto"
+                >
+                  <View style={styles.addPhotoIconCircle}>
+                    <Icon name="add_a_photo" size={22} color={colors.primary} />
+                  </View>
+                  <Text style={styles.addPhotoText}>Agregar foto</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Minimal GPS Telemetry Card */}
@@ -588,18 +596,16 @@ export const NewInstallationScreen: React.FC = () => {
               <View style={styles.gpsTelemetryRow}>
                 <View style={styles.gpsTelemetryCol}>
                   <Text style={styles.gpsMetaLabel}>Latitud</Text>
-                  <Text style={styles.gpsMetaValue}>{gpsCoords.latitude.toFixed(4)}</Text>
+                  <Text style={styles.gpsMetaValue}>{gpsCoords?.latitude.toFixed(4) ?? 'No disponible'}</Text>
                 </View>
                 <View style={styles.gpsTelemetryCol}>
                   <Text style={styles.gpsMetaLabel}>Longitud</Text>
-                  <Text style={styles.gpsMetaValue}>{gpsCoords.longitude.toFixed(4)}</Text>
+                  <Text style={styles.gpsMetaValue}>{gpsCoords?.longitude.toFixed(4) ?? 'No disponible'}</Text>
                 </View>
                 <View style={[styles.gpsTelemetryCol, { alignItems: 'flex-end' }]}>
                   <Text style={styles.gpsMetaLabel}>Precisión</Text>
-                  <Text style={[styles.gpsAccuracyValue, gpsCoords.isEstimated && { color: colors.warning }]}>
-                    {gpsCoords.isEstimated || gpsCoords.accuracy === undefined
-                      ? 'Estimada'
-                      : `±${Math.round(gpsCoords.accuracy)} m`}
+                  <Text style={styles.gpsAccuracyValue}>
+                    {gpsCoords?.accuracy != null ? `±${Math.round(gpsCoords.accuracy)} m` : 'No disponible'}
                   </Text>
                 </View>
               </View>
@@ -694,17 +700,17 @@ export const NewInstallationScreen: React.FC = () => {
               </View>
               <View style={styles.reviewField}>
                 <Text style={styles.reviewLabel}>Fotos</Text>
-                <Text style={styles.reviewValue}>{photos.length} fotos adjuntas</Text>
+                <Text style={styles.reviewValue}>{photos.length} {photos.length === 1 ? 'foto adjunta' : 'fotos adjuntas'}</Text>
               </View>
               <View style={styles.reviewField}>
                 <Text style={styles.reviewLabel}>Coordenadas GPS</Text>
                 <View style={styles.splitRow}>
                   <Text style={styles.reviewValueMono}>
-                    {gpsCoords.latitude.toFixed(4)}, {gpsCoords.longitude.toFixed(4)}
+                    {gpsCoords ? `${gpsCoords.latitude.toFixed(4)}, ${gpsCoords.longitude.toFixed(4)}` : 'No disponible'}
                   </Text>
-                  <Text style={styles.accuracyTag}>
-                    (±{Math.round(gpsCoords.accuracy || 5)} m)
-                  </Text>
+                  {gpsCoords?.accuracy != null && (
+                    <Text style={styles.accuracyTag}>(±{Math.round(gpsCoords.accuracy)} m)</Text>
+                  )}
                 </View>
               </View>
             </Card>
@@ -963,6 +969,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
   photoPlaceholder: {
     flex: 1,
     alignItems: 'center',
@@ -1018,9 +1028,12 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
     textAlign: 'center',
   },
-  addPhotoCard: {
+  addPhotoTile: {
     width: '48%',
     aspectRatio: 1,
+  },
+  addPhotoCard: {
+    flex: 1,
     backgroundColor: colors.surfaceContainerHigh,
     borderRadius: 12,
     alignItems: 'center',

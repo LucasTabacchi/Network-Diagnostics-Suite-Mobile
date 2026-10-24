@@ -1,9 +1,9 @@
+/* global jest */
 import mockSafeAreaContext from 'react-native-safe-area-context/jest/mock';
 
 jest.mock('react-native-safe-area-context', () => mockSafeAreaContext);
 
 jest.mock('react-native-screens', () => {
-  const React = require('react');
   const { View } = require('react-native');
   return {
     enableScreens: jest.fn(),
@@ -127,7 +127,6 @@ jest.mock('@react-native-community/geolocation', () => ({
 }));
 
 jest.mock('react-native-vision-camera', () => {
-  const React = require('react');
   const { View } = require('react-native');
   return {
     Camera: View,
@@ -137,6 +136,9 @@ jest.mock('react-native-vision-camera', () => {
       requestPermission: jest.fn(async () => true),
     })),
     useCodeScanner: jest.fn(() => ({})),
+    usePhotoOutput: jest.fn(() => ({
+      capturePhotoToFile: jest.fn(async () => ({ filePath: '/tmp/photo.jpg' })),
+    })),
   };
 });
 
@@ -161,6 +163,15 @@ jest.mock('react-native-blob-util', () => ({
       DownloadDir: '/storage/emulated/0/Download',
     },
     cp: jest.fn(async () => true),
+    exists: jest.fn(async () => true),
+    readFile: jest.fn(async () => 'aW1hZ2U='),
+    mkdir: jest.fn(async () => {}),
+  },
+  android: {
+    actionViewIntent: jest.fn(async () => true),
+  },
+  MediaCollection: {
+    copyToMediaStore: jest.fn(async () => 'content://downloads/report.pdf'),
   },
 }));
 

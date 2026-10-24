@@ -1,4 +1,5 @@
 import * as RNHTMLtoPDF from 'react-native-html-to-pdf';
+import ReactNativeBlobUtil from 'react-native-blob-util';
 
 export interface ReportPhoto {
   uri: string;
@@ -21,9 +22,9 @@ export interface InstallationReportData {
     opticalPower?: string;
     status?: string;
   };
-  gps: {
-    latitude: number;
-    longitude: number;
+  gps?: {
+    latitude?: number;
+    longitude?: number;
     accuracy?: number;
   };
   photos: ReportPhoto[];
@@ -45,8 +46,13 @@ export class PdfReportService {
    * Matches the official white-sheet layout from the field diagnostics design specification.
    */
   public static generateHtml(data: InstallationReportData): string {
-    const accuracyBadge = data.gps.accuracy ? ` (±${Math.round(data.gps.accuracy)} m)` : ' (Estimada de referencia)';
-    const coordsStr = `${data.gps.latitude.toFixed(4)}, ${data.gps.longitude.toFixed(4)}`;
+    const hasGps = Number.isFinite(data.gps?.latitude) && Number.isFinite(data.gps?.longitude);
+    const coordsStr = hasGps
+      ? `${data.gps!.latitude!.toFixed(4)}, ${data.gps!.longitude!.toFixed(4)}`
+      : 'Ubicación no disponible';
+    const accuracyBadge = hasGps && Number.isFinite(data.gps?.accuracy)
+      ? ` (±${Math.round(data.gps!.accuracy!)} m)`
+      : '';
 
     const safeReportId = escapeHtml(data.reportId);
     const safeSiteName = escapeHtml(data.siteName);
@@ -55,19 +61,20 @@ export class PdfReportService {
     const safeEquipName = escapeHtml(data.equipment.name);
     const safeEquipIp = escapeHtml(data.equipment.ip);
     const safeEquipMac = escapeHtml(data.equipment.mac);
-    const safeNotes = escapeHtml(data.notes || 'Instalación completada y verificada de conformidad técnica.');
+    const safeNotes = escapeHtml(data.notes || 'Sin notas técnicas');
 
     const photosHtml = data.photos && data.photos.length > 0
       ? data.photos
           .map(
             (p) => {
-              const photoCoords = (p.latitude !== undefined && p.longitude !== undefined)
-                ? `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}`
+              const photoCoords = (Number.isFinite(p.latitude) && Number.isFinite(p.longitude))
+                ? `${p.latitude!.toFixed(4)}, ${p.longitude!.toFixed(4)}`
                 : coordsStr;
               const safeLabel = escapeHtml(p.label);
+              const safeUri = escapeHtml(p.uri);
               return `
           <div style="flex: 1; min-width: 140px; margin: 4px; background: #E2E8F0; border-radius: 8px; overflow: hidden; position: relative;">
-            <img src="${p.uri}" alt="${safeLabel}" style="width: 100%; height: 110px; object-fit: cover; display: block;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+            <img src="${safeUri}" alt="${safeLabel}" style="width: 100%; height: 110px; object-fit: cover; display: block;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
             <div style="display: none; height: 110px; background: #16263D; color: #A4C9FF; align-items: center; justify-content: center; font-size: 11px; font-family: monospace;">[${safeLabel}]</div>
             <div style="position: absolute; bottom: 4px; left: 4px; right: 4px; background: rgba(15, 23, 42, 0.85); color: #FFFFFF; font-size: 9px; font-family: monospace; text-align: center; border-radius: 4px; padding: 2px;">
               ${safeLabel} · ${photoCoords}
@@ -273,7 +280,7 @@ export class PdfReportService {
 
   <div class="footer">
     <span>Generado automáticamente por com.fcyt.netdiag</span>
-    <span>Firma Técnica: VALIDADA</span>
+    <span>Documento generado en campo</span>
   </div>
 </body>
 </html>
@@ -285,10 +292,19 @@ export class PdfReportService {
    * Returns the absolute path of the generated PDF.
    */
   public static async generateReport(data: InstallationReportData): Promise<string> {
-    const html = this.generateHtml(data);
     const fileName = `reporte_${data.reportId.toLowerCase().replace(/[^a-z0-9_-]/g, '_')}`;
 
     try {
+      const embeddedPhotos = await Promise.all(data.photos.map(async photo => {
+        if (photo.uri.startsWith('data:image/')) {
+          return photo;
+        }
+        const path = photo.uri.replace(/^file:\/\//, '');
+        const imageBytes = await ReactNativeBlobUtil.fs.readFile(path, 'base64');
+        const mimeType = /\.png$/i.test(path) ? 'image/png' : 'image/jpeg';
+        return { ...photo, uri: `data:${mimeType};base64,${imageBytes}` };
+      }));
+      const html = this.generateHtml({ ...data, photos: embeddedPhotos });
       const options = {
         html,
         fileName,

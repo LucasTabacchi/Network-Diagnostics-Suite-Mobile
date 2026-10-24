@@ -1,6 +1,7 @@
 import { LocationService } from '../src/evidence/LocationService';
-import { DeviceSheetCache, DEVICE_CATALOG } from '../src/evidence/DeviceSheetCache';
+import { DeviceSheetCache } from '../src/evidence/DeviceSheetCache';
 import { PdfReportService } from '../src/evidence/PdfReportService';
+import ReactNativeBlobUtil from 'react-native-blob-util';
 import { MockDatabaseAdapter } from '../src/store/db/MockDatabaseAdapter';
 import { initializeSchema } from '../src/store/schema';
 import { DeviceRepository } from '../src/store/repositories/DeviceRepository';
@@ -9,6 +10,8 @@ describe('Evidence, GPS & Device Sheet Cache', () => {
   describe('LocationService', () => {
     it('should retrieve current GPS location', async () => {
       const loc = await LocationService.getCurrentLocation();
+      expect(loc).not.toBeNull();
+      if (!loc) throw new Error('Expected a measured GPS position');
       expect(loc.latitude).toBeCloseTo(-32.48, 1);
       expect(loc.longitude).toBeCloseTo(-58.23, 1);
       expect(loc.accuracy).toBeDefined();
@@ -62,6 +65,40 @@ describe('Evidence, GPS & Device Sheet Cache', () => {
   });
 
   describe('PdfReportService HTML Sanitization & Generation', () => {
+    it('embeds local photo bytes in generated PDF HTML', async () => {
+      const pdfConverter = jest.requireMock('react-native-html-to-pdf');
+      await PdfReportService.generateReport({
+        reportId: 'REP-PHOTO',
+        siteName: 'Sitio',
+        technicianName: 'Técnico',
+        date: '2026-10-22',
+        equipment: { name: 'Equipo', ip: '', mac: '' },
+        photos: [{ uri: 'file:///data/photo.jpg', label: 'Foto real' }],
+        notes: '',
+      });
+      expect(ReactNativeBlobUtil.fs.readFile).toHaveBeenCalledWith('/data/photo.jpg', 'base64');
+      expect(pdfConverter.convert).toHaveBeenCalledWith(
+        expect.objectContaining({ html: expect.stringContaining('data:image/jpeg;base64,aW1hZ2U=') }),
+      );
+    });
+
+    it('does not invent GPS coordinates, accuracy, notes, or approval when evidence is absent', () => {
+      const html = PdfReportService.generateHtml({
+        reportId: 'REP-EMPTY',
+        siteName: 'Sitio sin GPS',
+        technicianName: 'Técnico',
+        date: '2026-10-22',
+        equipment: { name: 'Equipo', ip: '', mac: '' },
+        photos: [],
+        notes: '',
+      });
+      expect(html).toContain('Ubicación no disponible');
+      expect(html).toContain('Sin notas técnicas');
+      expect(html).not.toContain('±');
+      expect(html).not.toContain('VALIDADA');
+      expect(html).not.toContain('Estimada de referencia');
+    });
+
     it('should sanitize HTML injection in notes, technician, and equipment names', () => {
       const html = PdfReportService.generateHtml({
         reportId: 'REP-001',

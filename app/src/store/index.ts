@@ -1,7 +1,6 @@
 import { DatabasePort } from './db/DatabasePort';
 import { OpSqliteAdapter } from './db/OpSqliteAdapter';
-import { MockDatabaseAdapter } from './db/MockDatabaseAdapter';
-import { initializeSchema, SCHEMA_SQL } from './schema';
+import { initializeSchema } from './schema';
 import { DeviceRepository } from './repositories/DeviceRepository';
 import { DiagnosticRepository } from './repositories/DiagnosticRepository';
 import { InstallationRepository } from './repositories/InstallationRepository';

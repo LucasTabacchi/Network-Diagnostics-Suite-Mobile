@@ -131,7 +131,7 @@ export class SshService {
         if (typeof client.disconnect === 'function') {
           try {
             client.disconnect();
-          } catch (_) {}
+          } catch {}
         }
         return output;
       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -29,14 +29,14 @@ export const SettingsScreen: React.FC = () => {
       let repos;
       try {
         repos = getRepositories();
-      } catch (_) {
+      } catch {
         repos = await initDatabase();
       }
       const mgr = new CredentialManager(repos.credentials);
       setManager(mgr);
       const list = await mgr.listAll();
       setCredentials(list);
-    } catch (_) {}
+    } catch {}
   }, []);
 
   useEffect(() => {

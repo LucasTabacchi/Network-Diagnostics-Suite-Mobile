@@ -10,6 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../core/theme/colors';
 import { spacing } from '../../core/theme/spacing';
@@ -27,10 +28,10 @@ export const SshConsoleScreen: React.FC = () => {
     ip = '192.168.1.1',
     user = 'admin',
     port = 22,
-    alias = 'Equipo',
     initialOutput,
   } = route.params || {};
 
+  const insets = useSafeAreaInsets();
   const sshService = useMemo(() => new SshService(), []);
   const scrollRef = useRef<any>(null);
 
@@ -49,7 +50,7 @@ export const SshConsoleScreen: React.FC = () => {
         let repos;
         try {
           repos = getRepositories();
-        } catch (_) {
+        } catch {
           repos = await initDatabase();
         }
         const manager = new CredentialManager(repos.credentials);
@@ -57,7 +58,7 @@ export const SshConsoleScreen: React.FC = () => {
         if (match?.secret) {
           setPassword(match.secret);
         }
-      } catch (_) {}
+      } catch {}
     })();
   }, [ip]);
 
@@ -95,7 +96,7 @@ export const SshConsoleScreen: React.FC = () => {
       let repos;
       try {
         repos = getRepositories();
-      } catch (_) {
+      } catch {
         repos = await initDatabase();
       }
 
@@ -123,7 +124,7 @@ export const SshConsoleScreen: React.FC = () => {
       });
 
       Alert.alert('Sesión guardada', 'La salida SSH se guardó en el historial y en la cola de sincronización.');
-    } catch (_) {
+    } catch {
       Alert.alert('Error', 'No se pudo guardar la sesión en el historial.');
     }
   }, [ip, user, terminalText]);
@@ -137,7 +138,12 @@ export const SshConsoleScreen: React.FC = () => {
         onPressSyncQueue={() => navigation.navigate('SyncQueue')}
       />
 
-      <View style={styles.content}>
+      <View
+        style={[
+          styles.content,
+          { paddingBottom: Math.max(spacing.margin, insets.bottom + spacing.sm) },
+        ]}
+      >
         {/* Host Info Card */}
         <Card style={styles.hostCard} variant="high">
           <View style={styles.hostRow}>

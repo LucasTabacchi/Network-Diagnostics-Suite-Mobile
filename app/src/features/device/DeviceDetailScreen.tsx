@@ -28,7 +28,6 @@ export const DeviceDetailScreen: React.FC = () => {
   const {
     ip,
     mac = 'F4:C3:61:9A:82:10',
-    model = 'Equipo de Red',
     hostname = 'Nodo-Principal',
     diagnosticId,
   } = route.params || {};
@@ -49,7 +48,7 @@ export const DeviceDetailScreen: React.FC = () => {
       let repos;
       try {
         repos = getRepositories();
-      } catch (_) {
+      } catch {
         repos = await initDatabase();
       }
       const record = await repos.diagnostics.findById(id);
@@ -59,12 +58,12 @@ export const DeviceDetailScreen: React.FC = () => {
           try {
             const data: DeviceTelemetry = JSON.parse(record.parsedTelemetryJson);
             setTelemetry(data);
-          } catch (_) {
+          } catch {
             setTelemetry(null);
           }
         }
       }
-    } catch (_) {
+    } catch {
       // ignore
     } finally {
       setLoading(false);
@@ -99,7 +98,7 @@ export const DeviceDetailScreen: React.FC = () => {
           payloadJson: JSON.stringify({ ip, ...data }),
           status: 'pending',
         });
-      } catch (dbErr) {
+      } catch {
         // If DB not yet initialized, initialize lazily
         try {
           const repos = await initDatabase();
@@ -113,7 +112,7 @@ export const DeviceDetailScreen: React.FC = () => {
             status: 'pending',
             createdAt: Date.now(),
           });
-        } catch (_) {}
+        } catch {}
       }
     } catch (err: any) {
       setTelemetry(null);
@@ -128,7 +127,7 @@ export const DeviceDetailScreen: React.FC = () => {
           status: 'failed',
           createdAt: Date.now(),
         });
-      } catch (dbErr) {
+      } catch {
         try {
           const repos = await initDatabase();
           const diagId = `diag_${Date.now()}`;
@@ -140,7 +139,7 @@ export const DeviceDetailScreen: React.FC = () => {
             status: 'failed',
             createdAt: Date.now(),
           });
-        } catch (_) {}
+        } catch {}
       }
       Alert.alert('Error SNMP', err?.message || 'No se pudo comunicar con el equipo');
     } finally {

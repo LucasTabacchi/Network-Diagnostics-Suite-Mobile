@@ -112,7 +112,7 @@ export class DeviceSheetCache {
           model: obj.model || obj.name,
           ip: obj.ip || obj.target,
         };
-      } catch (_) {}
+      } catch {}
     }
 
     // 2. URL parameters payload (e.g. https://netdiag.app/device?sn=HWTC1234&model=HG8245W5)
@@ -172,11 +172,11 @@ export class DeviceSheetCache {
               catalogEntry = remoteSheet;
             }
           }
-        } catch (_) {
+        } catch {
           clearTimeout(timeoutId);
         }
       }
-    } catch (_) {
+    } catch {
       // Offline fallback: rely on local catalog
     }
 
@@ -221,7 +221,7 @@ export class DeviceSheetCache {
           lastSeenAt: Date.now(),
           cachedSheetJson: JSON.stringify(sheet),
         });
-      } catch (_) {}
+      } catch {}
     }
 
     return sheet;

@@ -1,6 +1,5 @@
 import NetInfo from '@react-native-community/netinfo';
 import { DatabaseRepositories, getRepositories } from '../store';
-import { OutboxItem, Installation } from '../store/models';
 
 export interface ConflictRecord {
   conflictId: string;
@@ -102,7 +101,7 @@ export class SyncWorker {
       });
 
       if (response.status === 200) {
-        const body = await response.json();
+        await response.json();
         for (const item of pendingItems) {
           await repos.outbox.markSuccess(item.id);
           if (item.entityType === 'installation') {
@@ -187,7 +186,7 @@ export class SyncWorker {
             conflictStore.set(conflictId, conflict);
           }
         }
-      } catch (_) {}
+      } catch {}
     }
 
     if (resolution === 'keep_local') {

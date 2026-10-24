@@ -71,7 +71,23 @@ export class InstallationRepository {
     const res = await this.db.execute<any>(
       `SELECT * FROM installations ORDER BY created_at DESC`
     );
-    return res.rows.map((row) => this.mapRowToInstallation(row));
+    if (res.rows.length === 0) return [];
+    const photosRes = await this.db.execute<any>(`SELECT * FROM installation_photos`);
+    const photosByInstallation = new Map<string, InstallationPhoto[]>();
+    for (const photo of photosRes.rows) {
+      const photos = photosByInstallation.get(photo.installation_id) ?? [];
+      photos.push({
+        id: photo.id,
+        installationId: photo.installation_id,
+        filePath: photo.file_path,
+        label: photo.label ?? undefined,
+        capturedAt: Number(photo.captured_at),
+      });
+      photosByInstallation.set(photo.installation_id, photos);
+    }
+    return res.rows.map((row) =>
+      this.mapRowToInstallation(row, photosByInstallation.get(row.id) ?? [])
+    );
   }
 
   async update(inst: Partial<Installation> & { id: string }): Promise<void> {

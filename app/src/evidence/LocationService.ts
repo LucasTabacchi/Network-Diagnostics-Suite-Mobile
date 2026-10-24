@@ -5,14 +5,13 @@ export interface GpsCoordinates {
   longitude: number;
   accuracy?: number;
   timestamp: number;
-  isEstimated?: boolean;
 }
 
 export class LocationService {
   /**
-   * Fetches current GPS coordinates with high accuracy and transparent fallback flag.
+   * Returns a measured position, or null when location is unavailable.
    */
-  static async getCurrentLocation(timeoutMs = 10000): Promise<GpsCoordinates> {
+  static async getCurrentLocation(timeoutMs = 10000, maximumAgeMs = 15000): Promise<GpsCoordinates | null> {
     return new Promise((resolve) => {
       try {
         Geolocation.getCurrentPosition(
@@ -22,30 +21,13 @@ export class LocationService {
               longitude: position.coords.longitude,
               accuracy: position.coords.accuracy,
               timestamp: position.timestamp || Date.now(),
-              isEstimated: false,
             });
           },
-          () => {
-            // Signal loss fallback: Campus UADER FCyT Concepción del Uruguay (-32.4825, -58.2321)
-            // Marked explicitly as estimated
-            resolve({
-              latitude: -32.4825,
-              longitude: -58.2321,
-              accuracy: undefined,
-              timestamp: Date.now(),
-              isEstimated: true,
-            });
-          },
-          { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 15000 }
+          () => resolve(null),
+          { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: maximumAgeMs }
         );
-      } catch (_) {
-        resolve({
-          latitude: -32.4825,
-          longitude: -58.2321,
-          accuracy: undefined,
-          timestamp: Date.now(),
-          isEstimated: true,
-        });
+      } catch {
+        resolve(null);
       }
     });
   }

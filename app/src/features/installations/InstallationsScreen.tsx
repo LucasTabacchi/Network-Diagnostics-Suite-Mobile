@@ -85,7 +85,7 @@ export const InstallationsScreen: React.FC = () => {
               activeOpacity={0.8}
               onPress={() =>
                 navigation.navigate('PdfPreview', {
-                  filePath: item.pdfPath || `reporte_${item.id}.pdf`,
+                  filePath: item.pdfPath || '',
                   title: `Reporte de Instalación - ${item.deviceName}`,
                 })
               }
@@ -114,15 +114,15 @@ export const InstallationsScreen: React.FC = () => {
                   <View style={styles.evidenceItem}>
                     <Icon name="place" size={14} color={colors.onSurfaceVariant} />
                     <Text style={styles.evidenceText}>
-                      {item.gpsLat && item.gpsLng
+                      {item.gpsLat != null && item.gpsLng != null
                         ? `${item.gpsLat.toFixed(4)}, ${item.gpsLng.toFixed(4)}`
-                        : '-32.4825, -58.2372'}
+                        : 'GPS no disponible'}
                     </Text>
                   </View>
                   <View style={styles.evidenceItem}>
                     <Icon name="photo_camera" size={14} color={colors.onSurfaceVariant} />
                     <Text style={styles.evidenceText}>
-                      {item.photos?.length || 3} fotos
+                      {item.photos?.length ?? 0} fotos
                     </Text>
                   </View>
                   <View style={styles.evidenceItem}>

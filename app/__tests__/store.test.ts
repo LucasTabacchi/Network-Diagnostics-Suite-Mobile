@@ -1,7 +1,7 @@
 import { MockDatabaseAdapter } from '../src/store/db/MockDatabaseAdapter';
 import { initializeSchema } from '../src/store/schema';
 import { createRepositories } from '../src/store';
-import { Device, Diagnostic, Installation, CredentialMetadata, OutboxItem } from '../src/store/models';
+import { Device, Diagnostic, Installation, CredentialMetadata } from '../src/store/models';
 
 describe('Store & SQLite Repositories', () => {
   let mockDb: MockDatabaseAdapter;

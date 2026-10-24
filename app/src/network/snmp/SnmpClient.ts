@@ -51,7 +51,7 @@ export class SnmpClient {
         if (timer) clearTimeout(timer);
         try {
           socket.close();
-        } catch (_) {}
+        } catch {}
       };
 
       timer = setTimeout(() => {
@@ -64,7 +64,7 @@ export class SnmpClient {
         reject(err);
       });
 
-      socket.on('message', (msg, rinfo) => {
+      socket.on('message', (msg, _rinfo) => {
         try {
           // Normalize msg to Uint8Array
           let uint8: Uint8Array;

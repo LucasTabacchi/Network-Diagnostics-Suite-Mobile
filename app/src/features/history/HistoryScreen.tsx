@@ -7,13 +7,14 @@ import {
   TouchableOpacity,
   TextInput,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../core/theme/colors';
 import { spacing } from '../../core/theme/spacing';
 import { typography } from '../../core/theme/typography';
-import { StatusHeader, Card, Icon, ActionButton } from '../../core/ui';
+import { StatusHeader, Card, Icon } from '../../core/ui';
 import { RootStackParamList } from '../../core/navigation/types';
 import { getRepositories } from '../../store';
 
@@ -34,7 +35,6 @@ interface UnifiedHistoryItem {
 }
 
 const getTimeGroup = (timestamp: number): 'Hoy' | 'Ayer' | 'Anteriores' => {
-  const itemDate = new Date(timestamp);
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfYesterday = startOfToday - 86400000;
@@ -64,6 +64,7 @@ export const HistoryScreen: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState<HistoryType>('all');
   const [items, setItems] = useState<UnifiedHistoryItem[]>([]);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState(false);
 
   const loadData = async () => {
     try {
@@ -108,8 +109,10 @@ export const HistoryScreen: React.FC = () => {
       }
 
       setItems(mappedList);
-    } catch {
-      setItems([]);
+      setLoadError(false);
+    } catch (err) {
+      console.warn('[HistoryScreen] Failed to load local data:', err);
+      setLoadError(true);
     }
   };
 
@@ -145,20 +148,32 @@ export const HistoryScreen: React.FC = () => {
 
   const handleItemPress = (item: UnifiedHistoryItem) => {
     if (item.type === 'installation') {
+      if (!item.rawPayload?.pdfPath) {
+        Alert.alert('Reporte no disponible', 'Esta instalación no tiene un archivo PDF guardado.');
+        return;
+      }
       navigation.navigate('PdfPreview', {
-        filePath: item.rawPayload?.pdfPath || `reporte_${item.id}.pdf`,
+        filePath: item.rawPayload.pdfPath,
         title: `Reporte de Instalación - ${item.deviceName}`,
       });
     } else if (item.type === 'snmp') {
+      if (!item.ip) {
+        Alert.alert('IP no disponible', 'Este diagnóstico no tiene una dirección IP guardada.');
+        return;
+      }
       navigation.navigate('DeviceDetail', {
-        ip: item.ip || '192.168.1.254',
+        ip: item.ip,
         model: item.deviceName,
         hostname: item.deviceName,
         diagnosticId: item.id,
       });
     } else if (item.type === 'ssh') {
+      if (!item.ip) {
+        Alert.alert('IP no disponible', 'Esta sesión no tiene una dirección IP guardada.');
+        return;
+      }
       navigation.navigate('SshConsole', {
-        ip: item.ip || '192.168.1.1',
+        ip: item.ip,
         alias: item.deviceName,
         initialOutput: item.rawPayload?.rawOutput,
         diagnosticId: item.id,
@@ -192,9 +207,9 @@ export const HistoryScreen: React.FC = () => {
                 <Text
                   style={[
                     styles.resultText,
-                    item.resultStatus === 'OK' && { color: '#003822' },
-                    item.resultStatus === 'Falla' && { color: '#FFDAD6' },
-                    item.resultStatus === 'Alerta' && { color: '#00325A' },
+                    item.resultStatus === 'OK' && styles.resultTextOk,
+                    item.resultStatus === 'Falla' && styles.resultTextError,
+                    item.resultStatus === 'Alerta' && styles.resultTextWarn,
                   ]}
                 >
                   {item.resultStatus}
@@ -243,6 +258,14 @@ export const HistoryScreen: React.FC = () => {
           />
         }
       >
+        {loadError && (
+          <Card style={styles.loadErrorCard} variant="surface">
+            <Text style={styles.loadErrorText}>No se pudo cargar el historial local.</Text>
+            <TouchableOpacity onPress={loadData} accessibilityLabel="Reintentar carga del historial">
+              <Text style={styles.retryText}>Reintentar</Text>
+            </TouchableOpacity>
+          </Card>
+        )}
         {/* Offline Availability Pill */}
         <View style={styles.offlinePillRow}>
           <View style={styles.offlinePill}>
@@ -356,7 +379,7 @@ export const HistoryScreen: React.FC = () => {
           </View>
         )}
 
-        {filteredItems.length === 0 && (
+        {filteredItems.length === 0 && !loadError && (
           <Card style={styles.emptyCard} variant="surface">
             <Icon name="history" size={32} color={colors.outline} />
             <Text style={styles.emptyTitle}>Sin resultados en el historial</Text>
@@ -373,6 +396,9 @@ export const HistoryScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  loadErrorCard: { padding: spacing.md, gap: spacing.sm },
+  loadErrorText: { ...typography.bodySm, color: colors.critical },
+  retryText: { ...typography.labelLg, color: colors.primary },
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -498,6 +524,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  resultTextOk: { color: '#003822' },
+  resultTextError: { color: '#FFDAD6' },
+  resultTextWarn: { color: '#00325A' },
   deviceInfo: {
     gap: 2,
     marginTop: 2,

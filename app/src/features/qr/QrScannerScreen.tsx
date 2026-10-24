@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -22,6 +22,7 @@ import { StatusHeader, Card, Icon, StatusBadge, ActionButton } from '../../core/
 import { RootStackParamList } from '../../core/navigation/types';
 import { DeviceSheetCache, DeviceSheet } from '../../evidence/DeviceSheetCache';
 import { getRepositories, initDatabase } from '../../store';
+import { isValidDiagnosticIp } from './diagnosticTarget';
 
 export const QrScannerScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -32,9 +33,8 @@ export const QrScannerScreen: React.FC = () => {
   const [manualCode, setManualCode] = useState('');
   const [showManualInput, setShowManualInput] = useState(false);
   const [identifiedSheet, setIdentifiedSheet] = useState<DeviceSheet | null>(null);
+  const [diagnosticIp, setDiagnosticIp] = useState('');
   const lastScannedCodeRef = React.useRef<string | null>(null);
-
-  const cache = useMemo(() => new DeviceSheetCache(), []);
 
   useEffect(() => {
     if (!hasPermission) {
@@ -48,13 +48,14 @@ export const QrScannerScreen: React.FC = () => {
         let repos;
         try {
           repos = getRepositories();
-        } catch (_) {
+        } catch {
           repos = await initDatabase();
         }
         const activeCache = new DeviceSheetCache(repos.devices);
         const sheet = await activeCache.resolveDeviceSheet(code);
         setIdentifiedSheet(sheet);
-      } catch (_) {
+        setDiagnosticIp(sheet.ip || '');
+      } catch {
         Alert.alert('Código QR', `Código leído: ${code}`);
       }
     },
@@ -202,18 +203,33 @@ export const QrScannerScreen: React.FC = () => {
             </View>
 
             <View style={styles.actionButtonsCol}>
+              {!isValidDiagnosticIp(identifiedSheet.ip || '') && (
+                <TextInput
+                  style={styles.manualInput}
+                  placeholder="IP del equipo para diagnóstico"
+                  placeholderTextColor={colors.muted}
+                  keyboardType="numeric"
+                  value={diagnosticIp}
+                  onChangeText={setDiagnosticIp}
+                  accessibilityLabel="IP del equipo para diagnóstico"
+                />
+              )}
               <ActionButton
                 label="Abrir diagnóstico SNMP"
                 icon="radar"
                 variant="primary"
-                onPress={() =>
+                onPress={() => {
+                  if (!isValidDiagnosticIp(diagnosticIp)) {
+                    Alert.alert('IP requerida', 'Ingrese una dirección IPv4 válida del equipo antes de diagnosticar.');
+                    return;
+                  }
                   navigation.navigate('DeviceDetail', {
-                    ip: identifiedSheet.ip || '192.168.1.1',
-                    mac: identifiedSheet.mac || '00:00:00:00:00:00',
+                    ip: diagnosticIp.trim(),
+                    mac: identifiedSheet.mac,
                     model: identifiedSheet.model,
                     hostname: identifiedSheet.model,
-                  })
-                }
+                  });
+                }}
               />
               <ActionButton
                 label="Registrar nueva instalación"
@@ -222,7 +238,7 @@ export const QrScannerScreen: React.FC = () => {
                 onPress={() =>
                   navigation.navigate('NewInstallation', {
                     initialDeviceName: identifiedSheet.model,
-                    initialIp: identifiedSheet.ip,
+                    initialIp: isValidDiagnosticIp(identifiedSheet.ip || '') ? identifiedSheet.ip : undefined,
                     initialMac: identifiedSheet.mac,
                   })
                 }
@@ -233,7 +249,7 @@ export const QrScannerScreen: React.FC = () => {
           <Card style={styles.resultCard} variant="surface">
             <View style={styles.placeholderRow}>
               <Icon name="qr_code_scanner" size={28} color={colors.onSurfaceVariant} />
-              <View style={{ flex: 1 }}>
+              <View style={styles.placeholderText}>
                 <Text style={styles.placeholderTitle}>Esperando código QR / Barras</Text>
                 <Text style={styles.placeholderSub}>
                   Alinee la cámara hacia el código en la etiqueta del equipo o ingrese el identificador manualmente arriba.
@@ -418,6 +434,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingVertical: spacing.xs,
   },
+  placeholderText: { flex: 1 },
   placeholderTitle: {
     ...typography.labelLg,
     color: colors.onSurface,

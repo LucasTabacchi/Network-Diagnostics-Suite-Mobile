@@ -33,7 +33,7 @@ export class DiscoveryEngine {
         const netmask = state.details.subnet || '255.255.255.0';
         return calculateSubnet(ip, netmask);
       }
-    } catch (_) {}
+    } catch {}
 
     // Default lab subnet
     return calculateSubnet('192.168.1.100', '255.255.255.0');
@@ -46,7 +46,7 @@ export class DiscoveryEngine {
     subnet: SubnetInfo,
     onProgress?: ScanProgressCallback,
     onDeviceFound?: DeviceFoundCallback,
-    concurrency = 15
+    concurrency = 4
   ): Promise<DiscoveredDevice[]> {
     if (this.isScanning) {
       throw new Error('Un escaneo ya se encuentra en ejecución');
@@ -56,6 +56,8 @@ export class DiscoveryEngine {
     this.shouldCancel = false;
     const discovered: DiscoveredDevice[] = [];
     const hosts = subnet.hosts;
+    // Each host probes seven TCP ports in parallel; bound native socket load.
+    const hostConcurrency = Math.max(1, Math.min(Math.floor(concurrency), 4));
     let scanned = 0;
 
     // Start Zeroconf mDNS in parallel
@@ -83,14 +85,14 @@ export class DiscoveryEngine {
           }
         }
       });
-    } catch (_) {}
+    } catch {}
 
     try {
       // Chunk-based concurrency queue
-      for (let i = 0; i < hosts.length; i += concurrency) {
+      for (let i = 0; i < hosts.length; i += hostConcurrency) {
         if (this.shouldCancel) break;
 
-        const chunk = hosts.slice(i, i + concurrency);
+        const chunk = hosts.slice(i, i + hostConcurrency);
         const promises = chunk.map(async (ip) => {
           if (this.shouldCancel) return;
 
@@ -113,7 +115,7 @@ export class DiscoveryEngine {
                 isOnline: true,
                 lastSeenAt: Date.now(),
               });
-            } catch (_) {
+            } catch {
               try {
                 const repos = await initDatabase();
                 await repos.devices.upsert({
@@ -125,7 +127,7 @@ export class DiscoveryEngine {
                   isOnline: true,
                   lastSeenAt: Date.now(),
                 });
-              } catch (_) {}
+              } catch {}
             }
           }
 
@@ -149,7 +151,7 @@ export class DiscoveryEngine {
         if (typeof (this.zeroconf as any).removeAllListeners === 'function') {
           (this.zeroconf as any).removeAllListeners();
         }
-      } catch (_) {}
+      } catch {}
     }
 
     return discovered;
@@ -162,7 +164,7 @@ export class DiscoveryEngine {
       if (typeof (this.zeroconf as any).removeAllListeners === 'function') {
         (this.zeroconf as any).removeAllListeners();
       }
-    } catch (_) {}
+    } catch {}
   }
 
   getIsScanning(): boolean {

@@ -14,6 +14,7 @@ export interface DiscoveredDevice {
 }
 
 export const STRATEGIC_PORTS = [80, 443, 8291, 22, 23, 8080, 3000];
+export const SCAN_TCP_TIMEOUT_MS = 1500;
 
 /**
  * Probes a TCP port on a target host with a short timeout
@@ -33,7 +34,7 @@ export function probeTcpPort(
       if (client) {
         try {
           client.destroy();
-        } catch (_) {}
+        } catch {}
       }
     };
 
@@ -72,7 +73,7 @@ export function probeTcpPort(
           resolve(false);
         }
       });
-    } catch (_) {
+    } catch {
       if (!resolved) {
         resolved = true;
         cleanup();
@@ -93,37 +94,39 @@ export async function probeHost(
   const startTime = Date.now();
   const openPorts: number[] = [];
 
-  // 1. Probe strategic ports in parallel
+  // Probe TCP and SNMP together so slow hosts do not pay both timeouts in sequence.
   const portChecks = ports.map(async (p) => {
-    const isOpen = await probeTcpPort(host, p, 350);
+    const isOpen = await probeTcpPort(host, p, SCAN_TCP_TIMEOUT_MS);
     if (isOpen) openPorts.push(p);
   });
 
-  await Promise.all(portChecks);
+  const snmpCheck = (async () => {
+    try {
+      const snmpRes = await snmpClient.get(
+        host,
+        [OIDS.SYS_DESCR, OIDS.SYS_NAME, `${OIDS.IF_PHYS_ADDRESS}.1`],
+        'public',
+        600
+      );
+      const findVal = (oid: string) =>
+        snmpRes.varbinds.find((vb) => vb.oid === oid || vb.oid.startsWith(oid))?.value;
 
-  // 2. Probe SNMP
-  let snmpSuccess = false;
-  let sysDescr = '';
-  let sysName = '';
-  let mac: string | undefined;
+      return {
+        snmpSuccess: true,
+        sysDescr: (findVal(OIDS.SYS_DESCR) as string) || '',
+        sysName: (findVal(OIDS.SYS_NAME) as string) || '',
+        mac: (findVal(`${OIDS.IF_PHYS_ADDRESS}.1`) as string) || undefined,
+      };
+    } catch {
+      // SNMP timeout or disabled
+      return { snmpSuccess: false, sysDescr: '', sysName: '', mac: undefined };
+    }
+  })();
 
-  try {
-    const snmpRes = await snmpClient.get(
-      host,
-      [OIDS.SYS_DESCR, OIDS.SYS_NAME, `${OIDS.IF_PHYS_ADDRESS}.1`],
-      'public',
-      600
-    );
-    snmpSuccess = true;
-    const findVal = (oid: string) =>
-      snmpRes.varbinds.find((vb) => vb.oid === oid || vb.oid.startsWith(oid))?.value;
-
-    sysDescr = (findVal(OIDS.SYS_DESCR) as string) || '';
-    sysName = (findVal(OIDS.SYS_NAME) as string) || '';
-    mac = (findVal(`${OIDS.IF_PHYS_ADDRESS}.1`) as string) || undefined;
-  } catch (_) {
-    // SNMP timeout or disabled
-  }
+  const [, { snmpSuccess, sysDescr, sysName, mac }] = await Promise.all([
+    Promise.all(portChecks),
+    snmpCheck,
+  ]);
 
   const isOnline = openPorts.length > 0 || snmpSuccess;
   if (!isOnline) {

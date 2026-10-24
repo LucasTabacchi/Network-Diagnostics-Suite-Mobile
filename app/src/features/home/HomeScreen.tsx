@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -34,6 +35,7 @@ export const HomeScreen: React.FC = () => {
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
   const [recentActivities, setRecentActivities] = useState<RecentActivityItem[]>([]);
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [loadError, setLoadError] = useState(false);
 
   const formatRelativeTime = (timestamp: number): string => {
     const diffMin = Math.floor((Date.now() - timestamp) / 60000);
@@ -44,7 +46,7 @@ export const HomeScreen: React.FC = () => {
     return `${Math.floor(diffHours / 24)} d`;
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const repos = getRepositories();
       const count = await repos.outbox.countPending();
@@ -80,31 +82,38 @@ export const HomeScreen: React.FC = () => {
           title: inst.deviceName,
           subtitle: `IP: ${inst.deviceIp}`,
           timeStr: formatRelativeTime(inst.createdAt),
-          desc: 'Reporte de instalación generado',
+          desc: inst.pdfPath ? 'Reporte de instalación generado' : 'Instalación sin reporte PDF',
           status: inst.status,
           icon: 'install' as const,
           createdAt: inst.createdAt,
-          onPress: () =>
+          onPress: () => {
+            if (!inst.pdfPath) {
+              Alert.alert('Reporte no disponible', 'Esta instalación no tiene un archivo PDF guardado.');
+              return;
+            }
             navigation.navigate('PdfPreview', {
-              filePath: inst.pdfPath || `reporte_${inst.id}.pdf`,
+              filePath: inst.pdfPath,
               title: `Reporte de Instalación - ${inst.deviceName}`,
-            }),
+            });
+          },
         })),
       ]
         .sort((a, b) => b.createdAt - a.createdAt)
         .slice(0, 5);
 
       setRecentActivities(items);
-    } catch (_) {
-      // Keep safe defaults if database uninitialized in test mocks
+      setLoadError(false);
+    } catch (err) {
+      console.warn('[HomeScreen] Failed to load local data:', err);
+      setLoadError(true);
     }
-  };
+  }, [navigation]);
 
   useEffect(() => {
     if (isFocused) {
       loadData();
     }
-  }, [isFocused]);
+  }, [isFocused, loadData]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -131,6 +140,14 @@ export const HomeScreen: React.FC = () => {
           />
         }
       >
+        {loadError && (
+          <Card style={styles.loadErrorCard} variant="surface">
+            <Text style={styles.loadErrorText}>No se pudieron cargar los datos locales.</Text>
+            <TouchableOpacity onPress={loadData} accessibilityLabel="Reintentar carga de datos">
+              <Text style={styles.retryText}>Reintentar</Text>
+            </TouchableOpacity>
+          </Card>
+        )}
         {/* Header de la Suite */}
         <View style={styles.operatorSection}>
           <Text style={styles.greeting}>Suite de Diagnóstico</Text>
@@ -316,7 +333,7 @@ export const HomeScreen: React.FC = () => {
                 </View>
               </TouchableOpacity>
             ))
-          ) : (
+          ) : !loadError ? (
             <Card style={styles.emptyRecentCard} variant="surface">
               <Icon name="history" size={28} color={colors.muted} />
               <Text style={styles.emptyRecentTitle}>Sin actividad registrada</Text>
@@ -324,7 +341,7 @@ export const HomeScreen: React.FC = () => {
                 Los diagnósticos SNMP, sesiones SSH e instalaciones realizadas aparecerán aquí.
               </Text>
             </Card>
-          )}
+          ) : null}
         </View>
       </ScrollView>
     </View>
@@ -332,6 +349,9 @@ export const HomeScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
+  loadErrorCard: { padding: spacing.md, gap: spacing.sm },
+  loadErrorText: { ...typography.bodySm, color: colors.critical },
+  retryText: { ...typography.labelLg, color: colors.primary },
   screen: {
     flex: 1,
     backgroundColor: colors.background,

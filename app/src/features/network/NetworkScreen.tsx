@@ -29,7 +29,9 @@ export const NetworkScreen: React.FC = () => {
   const [subnet, setSubnet] = useState<SubnetInfo>(() =>
     calculateSubnet('192.168.1.100', '255.255.255.0')
   );
-  const [devices, setDevices] = useState<DiscoveredDevice[]>([]);
+  const [cachedDevices, setCachedDevices] = useState<DiscoveredDevice[]>([]);
+  const [scanDevices, setScanDevices] = useState<DiscoveredDevice[]>([]);
+  const [hasScanned, setHasScanned] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scannedCount, setScannedCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
@@ -45,26 +47,26 @@ export const NetworkScreen: React.FC = () => {
         let repos;
         try {
           repos = getRepositories();
-        } catch (_) {
+        } catch {
           repos = await initDatabase();
         }
 
         const stored = await repos.devices.listAll();
         if (mounted && stored.length > 0) {
-          setDevices(
+          setCachedDevices(
             stored.map((d) => ({
               ip: d.ip,
               mac: d.mac,
               name: d.hostname || `Equipo ${d.ip}`,
               vendor: d.vendor || 'Genérico',
               type: 'router',
-              openPorts: [80],
-              isOnline: d.isOnline,
-              responseTimeMs: 15,
+              openPorts: [],
+              isOnline: false,
+              responseTimeMs: 0,
             }))
           );
         }
-      } catch (_) {}
+      } catch {}
     })();
 
     return () => {
@@ -82,6 +84,8 @@ export const NetworkScreen: React.FC = () => {
 
     setIsScanning(true);
     setScannedCount(0);
+    setScanDevices([]);
+    setHasScanned(true);
 
     try {
       await engine.startScan(
@@ -90,7 +94,7 @@ export const NetworkScreen: React.FC = () => {
           setScannedCount(progress.scanned);
         },
         (newDev) => {
-          setDevices((prev) => {
+          setScanDevices((prev) => {
             const index = prev.findIndex((d) => d.ip === newDev.ip);
             if (index >= 0) {
               const updated = [...prev];
@@ -101,23 +105,24 @@ export const NetworkScreen: React.FC = () => {
           });
         }
       );
-    } catch (_) {
+    } catch {
     } finally {
       setIsScanning(false);
     }
   }, [isScanning, engine, subnet]);
 
+  const visibleDevices = hasScanned ? scanDevices : cachedDevices;
   const filteredDevices = useMemo(() => {
-    if (!searchQuery.trim()) return devices;
+    if (!searchQuery.trim()) return visibleDevices;
     const q = searchQuery.toLowerCase();
-    return devices.filter(
+    return visibleDevices.filter(
       (d) =>
         d.ip.toLowerCase().includes(q) ||
         d.name.toLowerCase().includes(q) ||
         d.vendor.toLowerCase().includes(q) ||
         (d.mac && d.mac.toLowerCase().includes(q))
     );
-  }, [devices, searchQuery]);
+  }, [visibleDevices, searchQuery]);
 
   const totalHosts = subnet.hosts.length || 254;
   const progressPercent = Math.min(
@@ -155,8 +160,10 @@ export const NetworkScreen: React.FC = () => {
                 <Text style={styles.progressText}>
                   {isScanning
                     ? `Escaneando: ${scannedCount}/${totalHosts} hosts`
-                    : scannedCount > 0
-                    ? `Escaneo completo: ${devices.length} detectados`
+                    : hasScanned
+                    ? scannedCount === totalHosts
+                      ? `Escaneo completo: ${scanDevices.length} ${scanDevices.length === 1 ? 'detectado' : 'detectados'}`
+                      : `Escaneo detenido: ${scanDevices.length} ${scanDevices.length === 1 ? 'detectado' : 'detectados'}`
                     : 'Listo para escanear'}
                 </Text>
               </View>
@@ -199,9 +206,13 @@ export const NetworkScreen: React.FC = () => {
         {/* Detected Devices Section */}
         <View style={styles.devicesSection}>
           <View style={styles.devicesHeader}>
-            <Text style={styles.devicesHeaderLabel}>DISPOSITIVOS DETECTADOS</Text>
+            <Text style={styles.devicesHeaderLabel}>
+              {hasScanned ? 'DISPOSITIVOS DETECTADOS' : 'EQUIPOS GUARDADOS (SIN VERIFICAR)'}
+            </Text>
             <Text style={styles.devicesHeaderCount}>
-              {filteredDevices.length} ONLINE
+              {filteredDevices.length} {hasScanned
+                ? filteredDevices.length === 1 ? 'ENCONTRADO' : 'ENCONTRADOS'
+                : filteredDevices.length === 1 ? 'GUARDADO' : 'GUARDADOS'}
             </Text>
           </View>
 
@@ -221,7 +232,7 @@ export const NetworkScreen: React.FC = () => {
             >
               <View style={styles.deviceTop}>
                 <View style={styles.deviceTitleRow}>
-                  <View style={styles.onlineDot} />
+                  <View style={[styles.onlineDot, !dev.isOnline && styles.cachedDot]} />
                   <Text style={styles.deviceName}>{dev.name}</Text>
                 </View>
 
@@ -252,7 +263,9 @@ export const NetworkScreen: React.FC = () => {
               <Icon name="radar" size={32} color={colors.onSurfaceVariant} />
               <Text style={styles.emptyTitle}>Ningún equipo detectado</Text>
               <Text style={styles.emptySub}>
-                Presiona "Iniciar escaneo de red" para descubrir equipos en la subred.
+                {hasScanned
+                  ? 'No se encontraron equipos que respondan en este escaneo.'
+                  : 'Presiona "Iniciar escaneo de red" para descubrir equipos en la subred.'}
               </Text>
             </View>
           )}
@@ -386,6 +399,9 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.success,
+  },
+  cachedDot: {
+    backgroundColor: colors.muted,
   },
   deviceName: {
     ...typography.labelLg,

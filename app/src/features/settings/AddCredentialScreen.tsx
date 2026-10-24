@@ -43,7 +43,7 @@ export const AddCredentialScreen: React.FC = () => {
       let repos;
       try {
         repos = getRepositories();
-      } catch (_) {
+      } catch {
         repos = await initDatabase();
       }
 
