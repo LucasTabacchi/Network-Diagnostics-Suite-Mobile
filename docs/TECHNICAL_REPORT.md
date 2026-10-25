@@ -88,6 +88,12 @@ Los primeros dos subidentificadores X e Y del OID (por ejemplo, `1.3` para `iso.
 
 Valor = suma desde i = 0 hasta k - 1 de (B_i & 0x7F) * 128^(k-1-i)
 
+#### Codificación Base-128 de Identificadores de Objetos (OID)
+
+Los primeros dos subidentificadores X e Y del OID (por ejemplo, `1.3` para `iso.org`) se compactan en el primer byte según la fórmula `(X × 40) + Y = 43` (`0x2B`). Los subidentificadores posteriores se codifican en base-128, con el bit más significativo de cada byte activado en todos los bytes menos en el último para indicar continuidad.
+
+Valor = suma desde i = 0 hasta k - 1 de (B_i & 0x7F) * 128^(k-1-i)
+
 ### 2.2 Estructura del Mensaje SNMP y Construcción de PDUs (`src/network/snmp/SnmpClient.ts`)
 
 La trama de un mensaje SNMPv2c respeta la siguiente jerarquía:
