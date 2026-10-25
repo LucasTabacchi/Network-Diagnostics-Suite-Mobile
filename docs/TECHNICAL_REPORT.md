@@ -62,7 +62,7 @@ Las abstracciones habituales de red en aplicaciones móviles se circunscriben al
 
 Las reglas básicas de codificación (BER) operan bajo una estructura Tipo-Longitud-Valor (TLV):
 1. **Identificador (Tag):** Define el tipo de dato, la clase (Universal, Application, Context-specific) y la forma (Primitivo vs. Construido).
-2. **Longitud (Length):** Codificada en forma corta (1 byte para longitudes $\le 127$) o en forma extendida (byte inicial $0x80 | N$ seguido de los $N$ bytes de longitud).
+2. **Longitud (Length):** Codificada en forma corta (1 byte para longitudes <= 127) o en forma extendida (byte inicial 0x80 | N seguido de los N bytes de longitud).
 3. **Valor (Value):** Representación binaria del dato según su tipo.
 
 Tipos ASN.1 / SNMP soportados e implementados:
@@ -83,7 +83,6 @@ Tipos ASN.1 / SNMP soportados e implementados:
 | `0xA2` | `GetResponse-PDU` | Contexto/Construido | PDU de respuesta del dispositivo con variables resueltas |
 
 #### Codificación Base-128 de Identificadores de Objetos (OID)
-
 Los primeros dos subidentificadores X e Y del OID (por ejemplo, `1.3` para `iso.org`) se compactan en el primer byte según la fórmula `(X × 40) + Y = 43` (`0x2B`). Los subidentificadores posteriores se codifican en base-128, con el bit más significativo de cada byte activado en todos los bytes menos en el último para indicar continuidad.
 
 Valor = suma desde i = 0 hasta k - 1 de (B_i & 0x7F) * 128^(k-1-i)
@@ -126,19 +125,19 @@ SEQUENCE (Mensaje) {
 
 ### 2.4 Análisis de Seguridad y Alcance del Protocolo
 
-- **Comunidades en Texto Claro:** SNMP v1 y v2c transmiten la cadena de comunidad en texto plano sin cifrado. En entornos de campo, se recomienda realizar las consultas a través de VLANs de administr[...]
-- **Suplantación y Replay UDP:** El protocolo UDP no posee un canal con estado. El cliente genera valores de `request-id` pseudoaleatorios criptográficos de 32 bits y valida que el paquete `GetRespo[...]
-- **Alcance frente a SNMPv3:** SNMPv3 introduce autenticación USM y cifrado CBC-DES/AES. Dado el alcance de este trabajo práctico y los requisitos de conectividad de routers de acceso en campo, se p[...]
+- **Comunidades en Texto Claro:** SNMP v1 y v2c transmiten la cadena de comunidad en texto plano sin cifrado. En entornos de campo, se recomienda realizar las consultas a través de VLANs de administración aisladas y de control de accesos.
+- **Suplantación y Replay UDP:** El protocolo UDP no posee un canal con estado. El cliente genera valores de `request-id` pseudoaleatorios criptográficos de 32 bits y valida que el paquete `GetResponse` corresponda a la solicitud emitida antes de aceptar la respuesta.
+- **Alcance frente a SNMPv3:** SNMPv3 introduce autenticación USM y cifrado CBC-DES/AES. Dado el alcance de este trabajo práctico y los requisitos de conectividad de routers de acceso en campo, se prioriza el soporte de SNMPv1/v2c con una política de segmentación estricta.
 
 ---
 
 ## 3. Arquitectura de Seguridad y Gestión de Credenciales
 
-Los técnicos de campo manejan accesos privilegiados a equipamiento heterogéneo (MikroTik RouterOS, Cisco IOS, Huawei VRP, Ubiquiti EdgeOS). La persistencia de contraseñas o claves privadas en archi[...]
+Los técnicos de campo manejan accesos privilegiados a equipamiento heterogéneo (MikroTik RouterOS, Cisco IOS, Huawei VRP, Ubiquiti EdgeOS). La persistencia de contraseñas o claves privadas en archivos locales es un riesgo de seguridad crítico y por eso se resguardan con mecanismos criptográficos del sistema operativo.
 
 ### 3.1 Integración con Hardware Keystore (`src/security/CredentialManager.ts`)
 
-- **Aislamiento Criptográfico:** Las contraseñas y claves privadas **nunca se guardan en SQLite ni en texto plano**. Se resguardan exclusivamente en el **Android Keystore System** a través de `reac[...]
+- **Aislamiento Criptográfico:** Las contraseñas y claves privadas **nunca se guardan en SQLite ni en texto plano**. Se resguardan exclusivamente en el **Android Keystore System** a través de `react-native-keychain` y APIs del sistema.
 - **Patrón de Referencia Opaca en SQLite:** La tabla `credentials` de la base de datos local almacena únicamente metadatos descriptivos:
   - `id`: Identificador UUIDv4 único.
   - `name`: Nombre descriptivo (ej: "Nodo Centro - Admin").
@@ -146,7 +145,7 @@ Los técnicos de campo manejan accesos privilegiados a equipamiento heterogéneo
   - `username`: Nombre de usuario SSH.
   - `keychain_ref`: Puntero de referencia al Keystore (`netdiag_cred_<id>`).
   - `port`: Puerto SSH configurado (22, 2222, etc.).
-- **Desreferenciación Efímera en Memoria:** El secreto en texto claro solo se extrae del enclave seguro en el instante exacto de abrir la sesión SSH y se libera de memoria una vez autenticada la co[...]
+- **Desreferenciación Efímera en Memoria:** El secreto en texto claro solo se extrae del enclave seguro en el instante exacto de abrir la sesión SSH y se libera de memoria una vez autenticada la conexión.
 - **Saneamiento de la Cola Outbox:** Los paquetes de datos preparados para sincronización hacia el backend no incluyen credenciales ni material criptográfico sensible.
 
 ### 3.2 Servicio de Comandos SSH (`src/network/ssh/SshService.ts`)
@@ -213,16 +212,16 @@ CREATE TABLE IF NOT EXISTS outbox (
 
 Cuando los envíos fallan por pérdida de conectividad o indisponibilidad del servidor, el trabajador aplica un cálculo de reintento exponencial truncado con fluctuación aleatoria (jitter):
 
-$$t_{\text{reintento}} = t_{\text{actual}} + \min\left(t_{\text{tope}}, \ t_{\text{base}} \times 2^{\text{intentos}} + \text{jitter}\right)$$
+t_reintento = t_actual + min(t_tope, t_base × 2^intentos + jitter)
 
 Valores de configuración:
-- $t_{\text{base}} = 2\text{ segundos}$
-- $t_{\text{tope}} = 300\text{ segundos (5 minutos)}$
-- $\text{jitter} \in [0, 1000\text{ ms}]$
+- t_base = 2 segundos
+- t_tope = 300 segundos (5 minutos)
+- jitter ∈ [0, 1000 ms]
 
 ### 4.3 Disparo Automático por Conectividad (NetInfo Listener)
 
-`SyncWorker` se suscribe a los eventos de `@react-native-community/netinfo`. Al pasar de un estado sin red a `isConnected: true` (o `isInternetReachable: true`), el trabajador despierta automáticamen[...]
+`SyncWorker` se suscribe a los eventos de `@react-native-community/netinfo`. Al pasar de un estado sin red a `isConnected: true` (o `isInternetReachable: true`), el trabajador despierta automáticamente y procesa la cola de sincronización pendiente.
 
 ### 4.4 Protocolo de Resolución de Conflictos (HTTP 409)
 
@@ -267,16 +266,16 @@ sequenceDiagram
 
 ### 4.5 Justificación Tecnológica: Selección de `@op-engineering/op-sqlite` frente a `WatermelonDB`
 
-El enunciado del proyecto requería la implementación de persistencia local offline-first robusta, permitiendo optar entre **SQLite nativo** o **WatermelonDB**. La decisión de ingeniería de se[...]
+El enunciado del proyecto requería la implementación de persistencia local offline-first robusta, permitiendo optar entre **SQLite nativo** o **WatermelonDB**. La decisión de ingeniería de selección se fundamentó en criterios de rendimiento, estabilidad de la arquitectura y compatibilidad con la plataforma.
 
 1. **Rendimiento C++ JSI Directo sin Serialización Bridge:**  
-   `op-sqlite` utiliza enlaces directos a nivel C++ mediante JavaScript Interface (JSI). Las operaciones de lectura/escritura en la base de datos se ejecutan en memoria compartida sin serializar [...]
+   `op-sqlite` utiliza enlaces directos a nivel C++ mediante JavaScript Interface (JSI). Las operaciones de lectura/escritura en la base de datos se ejecutan en memoria compartida sin serializar ni deserializar payloads en cada transacción.
 2. **Compatibilidad Plena con React Native 0.87 (New Architecture - Fabric & TurboModules):**  
-   React Native 0.87 opera con la Nueva Arquitectura habilitada por defecto. `op-sqlite` posee soporte nativo para TurboModules y C++ JSI de primera clase, mientras que WatermelonDB históricamen[...]
+   React Native 0.87 opera con la Nueva Arquitectura habilitada por defecto. `op-sqlite` posee soporte nativo para TurboModules y C++ JSI de primera clase, mientras que WatermelonDB históricamente requiere más adaptaciones y presenta ciertas limitaciones con arquitectura moderna.
 3. **Control Transaccional ACID y SQL Estándar:**  
-   La gestión de colas Outbox y diagnósticos exige garantías transaccionales ACID estrictas (`BEGIN TRANSACTION`, `COMMIT`, `ROLLBACK`). `op-sqlite` ofrece SQL relacional ANSI puro y transacci[...]
+   La gestión de colas Outbox y diagnósticos exige garantías transaccionales ACID estrictas (`BEGIN TRANSACTION`, `COMMIT`, `ROLLBACK`). `op-sqlite` ofrece SQL relacional ANSI puro y transacciones explícitas, con mejor control sobre integridad y consistencia.
 4. **Baja Huella de Memoria en Dispositivos de Campo:**  
-   Los dispositivos móviles utilizados por cuadrillas técnicas en campo suelen ser terminales Android de gama media o de uso rudo con memoria RAM acotada. Prescindir de la sobrecarga de un moto[...]
+   Los dispositivos móviles utilizados por cuadrillas técnicas en campo suelen ser terminales Android de gama media o de uso rudo con memoria RAM acotada. Prescindir de la sobrecarga de un motor ORM pesado redujo los riesgos de consumo excesivo y degradación en operación continua.
 
 ---
 
@@ -291,12 +290,12 @@ Los equipos de telecomunicaciones presentan etiquetas con números de serie, dir
   - URLs de inventario: `https://telecom.net/dev?id=HUAW123456&model=HG8245H`
   - Direcciones MAC directas: `E0:69:95:A1:B2:C3` o `E06995A1B2C3`
   - Números de serie estándar: `SN-1234567890`
-- **Catálogo Técnico Fuera de Línea:** Sin conexión a internet, los modelos reconocidos se vinculan de inmediato a una base local con especificaciones de puertos, frecuencias y umbrales ópti[...]
+- **Catálogo Técnico Fuera de Línea:** Sin conexión a internet, los modelos reconocidos se vinculan de inmediato a una base local con especificaciones de puertos, frecuencias y umbrales ópticos.
 
 ### 5.2 Geolocalización y Validación de Precisión (`src/evidence/LocationService.ts`)
 
 - **GPS de Alta Precisión:** Coordenadas obtenidas mediante `@react-native-community/geolocation` con `enableHighAccuracy: true` y límite de tiempo de 10 segundos.
-- **Transparencia en Fix Satelital:** Cuando la señal de satélite no penetra (armarios metálicos o subterráneos), el servicio provee coordenadas de referencia del campus FCyT Concepción del Urugu[...]
+- **Transparencia en Fix Satelital:** Cuando la señal de satélite no penetra (armarios metálicos o subterráneos), el servicio provee coordenadas de referencia del campus FCyT Concepción del Uruguay para mantener trazabilidad del trabajo técnico.
 
 ### 5.3 Asistente de Instalación y Generador de Reportes PDF (`src/evidence/PdfReportService.ts`)
 
@@ -323,18 +322,18 @@ El proceso de instalación consta de un asistente estructurado en 4 etapas:
 
 Para barrer la subred local sin invocar comandos de shell dependientes de la plataforma, el cálculo de rangos se efectúa mediante aritmética de 32 bits en TypeScript puro:
 
-$$\text{Entero de Red} = \text{Entero IP} \ \& \ \text{Entero Máscara}$$
+Entero de Red = Entero IP & Entero Máscara
 
-$$\text{Entero Broadcast} = \text{Entero Red} \ | \ (\sim\text{Entero Máscara} \ \& \ \text{0xFFFFFFFF})$$
+Entero Broadcast = Entero Red | (~Entero Máscara & 0xFFFFFFFF)
 
-Las direcciones de host utilizables se generan en el intervalo $[\text{Red} + 1, \ \text{Broadcast} - 1]$, acotando la búsqueda a un máximo de 254 hosts (prefijo `/24`) para evitar saturación de so[...]
+Las direcciones de host utilizables se generan en el intervalo [Red + 1, Broadcast - 1], acotando la búsqueda a un máximo de 254 hosts (prefijo /24) para evitar saturación de la red.
 
 ### 6.2 Sondeo Concurrente de Puertos y Servicios
 
 El motor articula varias técnicas de descubrimiento en paralelo:
-- **Barrido Concurrente de Puertos TCP:** Conexión hacia puertos estándar de gestión de telecomunicaciones (`22` SSH, `23` Telnet, `80` HTTP, `443` HTTPS, `8291` MikroTik Winbox, `8080` Web alterna[...]
-- **Sondeo SNMP Ping:** Envío de solicitudes `GetRequest` para `sysDescr.0` (`1.3.6.1.2.1.1.1.0`) sobre UDP 161. Los equipos que responden son clasificados de inmediato con su fabricante y nombre de [...]
-- **Descubrimiento Zero-Configuration (mDNS):** Escucha de anuncios Bonjour / Avahi (`_http._tcp.`, `_ssh._tcp.`, `_snmp._udp.`) mediante `react-native-zeroconf` con limpieza rigurosa de escuchadores [...]
+- **Barrido Concurrente de Puertos TCP:** Conexión hacia puertos estándar de gestión de telecomunicaciones (`22` SSH, `23` Telnet, `80` HTTP, `443` HTTPS, `8291` MikroTik Winbox, `8080` Web alternativo, `2000` y `161` SNMP).
+- **Sondeo SNMP Ping:** Envío de solicitudes `GetRequest` para `sysDescr.0` (`1.3.6.1.2.1.1.1.0`) sobre UDP 161. Los equipos que responden son clasificados de inmediato con su fabricante y nombre de host.
+- **Descubrimiento Zero-Configuration (mDNS):** Escucha de anuncios Bonjour / Avahi (`_http._tcp.`, `_ssh._tcp.`, `_snmp._udp.`) mediante `react-native-zeroconf` con limpieza rigurosa de escuchadores para evitar fugas de memoria.
 
 ---
 
@@ -342,8 +341,8 @@ El motor articula varias técnicas de descubrimiento en paralelo:
 
 ### 7.1 Mitigación de Restricciones de Lectura ARP en Android 10+
 
-A partir de Android 10 (Nivel de API 29), el sistema operativo bloquea la lectura del archivo del kernel `/proc/net/arp` y neutraliza las consultas de direcciones MAC vía `getifaddrs()`, devolviendo [...]
-- **Solución Arquitectónica:** En lugar de intentar leer tablas ARP protegidas por el sistema operativo, la suite consulta la tabla MIB-II **`ifPhysAddress.1` (`1.3.6.1.2.1.2.2.1.6.1`)** mediante SN[...]
+A partir de Android 10 (Nivel de API 29), el sistema operativo bloquea la lectura del archivo del kernel `/proc/net/arp` y neutraliza las consultas de direcciones MAC vía `getifaddrs()`, devolviendo un conjunto de direcciones incompleto o vacío en dispositivos con restricciones de privacidad.
+- **Solución Arquitectónica:** En lugar de intentar leer tablas ARP protegidas por el sistema operativo, la suite consulta la tabla MIB-II `ifPhysAddress.1` (`1.3.6.1.2.1.2.2.1.6.1`) mediante SNMP o por sondas de red compatibles con el entorno Android moderno.
 
 ### 7.2 Permisos de Manifiesto y Configuración Multicast
 
