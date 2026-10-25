@@ -83,15 +83,16 @@ Tipos ASN.1 / SNMP soportados e implementados:
 | `0xA2` | `GetResponse-PDU` | Contexto/Construido | PDU de respuesta del dispositivo con variables resueltas |
 
 #### Codificación Base-128 de Identificadores de Objetos (OID)
-Los primeros dos subidentificadores $X$ e $Y$ del OID (por ejemplo, `1.3` para `iso.org`) se compactan en el primer byte según la fórmula $(X \times 40) + Y = 43$ (`0x2B`). Los subidentificadores po[...]
 
-$$Valor = \sum_{i=0}^{k-1}(B_i \& 0x7F)\cdot128^{(k-1-i)}$$
+Los primeros dos subidentificadores X e Y del OID (por ejemplo, `1.3` para `iso.org`) se compactan en el primer byte según la fórmula `(X × 40) + Y = 43` (`0x2B`). Los subidentificadores posteriores se codifican en base-128, con el bit más significativo de cada byte activado en todos los bytes menos en el último para indicar continuidad.
+
+Valor = suma desde i = 0 hasta k - 1 de (B_i & 0x7F) * 128^(k-1-i)
 
 ### 2.2 Estructura del Mensaje SNMP y Construcción de PDUs (`src/network/snmp/SnmpClient.ts`)
 
 La trama de un mensaje SNMPv2c respeta la siguiente jerarquía:
 
-```
+```text
 SEQUENCE (Mensaje) {
     INTEGER (versión: 0 para v1, 1 para v2c)
     OCTET STRING (comunidad: e.g. "public")
